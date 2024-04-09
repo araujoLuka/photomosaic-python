@@ -3,14 +3,13 @@
 import argparse
 from PIL import Image
 
+verbose: bool = False
+
 def openImage(path) -> Image.Image:
     return Image.open(path)
 
 def saveImage(image: Image.Image, path: str) -> None:
     image.save(path)
-
-def createMosaic(originalImage: Image.Image, datasetPath: str, crops: list) -> Image.Image:
-    return Image.new("RGB", originalImage.size, color="white")
 
 def getAverageColor(image: Image.Image) -> tuple:
     histogram = image.histogram()
@@ -46,6 +45,15 @@ def imageInfo(image: Image.Image, id: str = "", imagePath: str = "", dataUsed: i
     if dataUsed != 0:
         print(" - Total images used: {0}".format(dataUsed))
 
+def createMosaic(originalImage: Image.Image, 
+                 datasetPath: str, 
+                 datasetSummaryPath: str,
+                 canRepeat: bool,
+                 crops: list,
+                 orgAvgColor: tuple = (80, 80, 80)) -> Image.Image:
+
+    return Image.new("RGB", originalImage.size, color=orgAvgColor)
+
 def main(originalImagePath: str,
          datasetPath: str,
          datasetSummaryPath: str,
@@ -64,17 +72,18 @@ def main(originalImagePath: str,
     print(f"Crop size: {cropSize}")
     crop: list = cropImage(originalImage, cropSize)
 
-    print("First 5 crops:")
-    for i in range(5):
-        imageInfo(crop[i], id="Crop {0}".format(i))
-        crop[i].show()
-        input("Press Enter to continue...")
+    # DEBUG
+    # print("First 5 crops:")
+    # for i in range(5):
+    #     imageInfo(crop[i], id="Crop {0}".format(i))
+    #     crop[i].show()
+    #     input("Press Enter to continue...")
 
     imageInfo(originalImage, id="Original Image", imagePath=originalImagePath)
     originalImage.show()
 
     print("Creating new image...")
-    mosaicImage: Image.Image = createMosaic(originalImage, datasetPath, crop)
+    mosaicImage: Image.Image = createMosaic(originalImage, datasetPath, datasetSummaryPath, canRepeat, crop, getAverageColor(originalImage))
     saveImage(mosaicImage, "output.jpg")
 
     imageInfo(mosaicImage, id="Mosaic Image", imagePath="output.jpg", dataUsed=len(crop))
@@ -91,7 +100,7 @@ if __name__ == "__main__":
                             type=str, help="Path to the photo to be converted to a photomosaic")
     parser.add_argument("datasetPath", default="./data", action="store", nargs='?',  
                             type=str, help="Path to the dataset of images")
-    parser.add_argument("datasetSummaryPath", default="./data_summary.txt", action="store",  nargs='?',  
+    parser.add_argument("datasetSummaryPath", default="./data_summary.json", action="store",  nargs='?',  
                             type=str, help="Path to the dataset summary file")
     parser.add_argument("canRepeat", default=False, action="store", nargs='?',  
                             type=bool, help="Whether or not images can be repeated in the photomosaic (default: False)")
@@ -100,16 +109,15 @@ if __name__ == "__main__":
 
     # options
     parser.add_argument("-v",  "--verbose", dest="verbose", action="store_true", help="Increase output verbosity")
-    parser.add_argument("-r", "--canRepeat", dest="repeat", action="store_true", help="Allow images to be repeated in the photomosaic")
+    parser.add_argument("-r", "--canRepeat", dest="canRepeat", action="store_true", help="Allow images to be repeated in the photomosaic")
 
     args = parser.parse_args()
 
-    if args.repeat:
-        print("Images can be repeated in the photomosaic")
-        args.canRepeat = True
+    verbose = args.verbose
 
-    if args.verbose:
-        print("Verbose mode activated")
+    if not args.datasetSummaryPath.endswith(".json"):
+        print("Error: Dataset summary path must be a json file.")
+        exit(1)
 
     # DEBUG ARGS
     print(args)
