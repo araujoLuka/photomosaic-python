@@ -9,8 +9,8 @@ def openImage(path) -> Image.Image:
 def saveImage(image: Image.Image, path: str) -> None:
     image.save(path)
 
-def createMosaic(originalImage: Image.Image, datasetPath: str) -> Image.Image:
-    return Image.new("RGB", originalImage.size)
+def createMosaic(originalImage: Image.Image, datasetPath: str, crops: list) -> Image.Image:
+    return Image.new("RGB", originalImage.size, color="white")
 
 def getAverageColor(image: Image.Image) -> tuple:
     histogram = image.histogram()
@@ -23,13 +23,21 @@ def getAverageColor(image: Image.Image) -> tuple:
     avgB = sum(i * b[i] for i in range(256)) // pixels
     return (avgR, avgG, avgB)
 
-def main(
-    originalImagePath: str = "image.jpg", 
-    datasetPath: str = "./data",
-    datasetSummaryPath: str = "./data_summary.txt",
-    canRepeat: bool = False,
-    numDivisions: int = 1,
-    ) -> int:
+def cropImage(image: Image.Image, cropSize: tuple) -> list:
+    crops: list = []
+    imageWidth, imageHeight = image.size
+    cropWidth, cropHeight = cropSize
+    for y in range(0, imageHeight, cropHeight):
+        for x in range(0, imageWidth, cropWidth):
+            box = (x, y, x + cropWidth, y + cropHeight)
+            crops.append(image.crop(box))
+    return crops
+
+def main(originalImagePath: str,
+         datasetPath: str,
+         datasetSummaryPath: str,
+         canRepeat: bool,
+         numDivisions: int ) -> int:
 
     print("Hello, World!")
     print("Photomosaic")
@@ -38,6 +46,20 @@ def main(
 
     imageWidth, imageHeight = originalImage.size
     print(f"Image size: {imageWidth}x{imageHeight}")
+
+    cropSize: tuple = (imageWidth // numDivisions, imageHeight // numDivisions)
+    print(f"Crop size: {cropSize}")
+    crop: list = cropImage(originalImage, cropSize)
+
+    print("First 5 crops:")
+    for i in range(5):
+        print("Crop {0}:".format(i))
+        print(" - Size: {0}".format(crop[i].size))
+        print(" - Mode: {0}".format(crop[i].mode))
+        print(" - Format: {0}".format(crop[i].format))
+        print(" - Average Color: {0}".format(getAverageColor(crop[i])))
+        crop[i].show()
+        input("Press Enter to continue...")
 
     orgAvgColor = getAverageColor(originalImage)
 
@@ -50,17 +72,17 @@ def main(
     originalImage.show()
 
     print("Creating new image...")
-    newImage = Image.new("RGB", (imageWidth, imageHeight), color = orgAvgColor)
-    saveImage(newImage, "output.jpg")
+    mosaicImage: Image.Image = createMosaic(originalImage, datasetPath, crop)
+    saveImage(mosaicImage, "output.jpg")
 
     print("New Image Info:")
-    print(" - Format: {0}".format(newImage.format))
-    print(" - Mode: {0}".format(newImage.mode))
-    print(" - Size: {0}".format(newImage.size))
+    print(" - Format: {0}".format(mosaicImage.format))
+    print(" - Mode: {0}".format(mosaicImage.mode))
+    print(" - Size: {0}".format(mosaicImage.size))
     print(" - Path: {0}".format("output.jpg"))
-    print(" - Average Color: {0}".format(getAverageColor(newImage)))
+    print(" - Average Color: {0}".format(getAverageColor(mosaicImage)))
     print(" - Total images used: {0}".format(0))
-    newImage.show()
+    mosaicImage.show()
 
     print("Done.")
     input("Press Enter to end...")
