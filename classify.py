@@ -5,25 +5,25 @@ import os
 import json
 from PIL import Image
 from photomosaic import getAverageColor
-from photomosaic import imageInfo
 
 def classifyDataset(datasetPath: str, datasetSummaryPath: str) -> dict:
     print("Classifying dataset...")
     print("Dataset path: {0}".format(datasetPath))
 
     numImages = 0
-    colorRange = 64
+    colorRange = 32
 
-    colorClassifier = {
+    rgbClassification = {
+        "colorRange": colorRange, # "16, 32, 64, 128, 256
         "r": {},
         "g": {},
         "b": {}
     }
 
     for i in range(0, 256, colorRange):
-        colorClassifier["r"]["{0}-{1}".format(i, i+colorRange)] = []
-        colorClassifier["g"]["{0}-{1}".format(i, i+colorRange)] = []
-        colorClassifier["b"]["{0}-{1}".format(i, i+colorRange)] = []
+        rgbClassification["r"]["{0}-{1}".format(i, i+colorRange)] = []
+        rgbClassification["g"]["{0}-{1}".format(i, i+colorRange)] = []
+        rgbClassification["b"]["{0}-{1}".format(i, i+colorRange)] = []
 
     for i, filename in enumerate(os.listdir(datasetPath)):
         if not filename.endswith(".jpg") and not filename.endswith(".jpeg") and not filename.endswith(".png"):
@@ -35,7 +35,7 @@ def classifyDataset(datasetPath: str, datasetSummaryPath: str) -> dict:
         if image.mode != "RGB":
             image = image.convert("RGB")
 
-        imageInfo(image, id="Image {0}".format(i), imagePath=imagePath)
+        print("\rClassifying image {0}: {1} - Size: {2}".format(i, imagePath, image.size), end="")
         averageColor = getAverageColor(image)
 
         r = averageColor[0]
@@ -45,22 +45,21 @@ def classifyDataset(datasetPath: str, datasetSummaryPath: str) -> dict:
         imageData = {
             "path": imagePath,
             "averageColor": averageColor,
-            "useCount": 0
+            "used": False
         }
 
-        for i in range(0, 256, colorRange):
-            if r >= i and r < i+colorRange:
-                colorClassifier["r"]["{0}-{1}".format(i, i+colorRange)].append(imageData)
-            if g >= i and g < i+colorRange:
-                colorClassifier["g"]["{0}-{1}".format(i, i+colorRange)].append(imageData)
-            if b >= i and b < i+colorRange:
-                colorClassifier["b"]["{0}-{1}".format(i, i+colorRange)].append(imageData)
+        if r > g and r > b:
+            rgbClassification["r"]["{0}-{1}".format(r-r%colorRange, r+colorRange-r%colorRange)].append(imageData)
+        elif g > r and g > b:
+            rgbClassification["g"]["{0}-{1}".format(g-g%colorRange, g+colorRange-g%colorRange)].append(imageData)
+        else:
+            rgbClassification["b"]["{0}-{1}".format(b-b%colorRange, b+colorRange-b%colorRange)].append(imageData)
 
     jsonData = {
         "description": "Dataset Summary",
         "datasetPath": datasetPath,
         "numImages": numImages,
-        "colorClassifier": colorClassifier
+        "rgbClassification":rgbClassification
     }
 
     f = open(datasetSummaryPath, "w")
