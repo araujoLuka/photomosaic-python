@@ -33,6 +33,19 @@ def cropImage(image: Image.Image, cropSize: tuple) -> list:
             crops.append(image.crop(box))
     return crops
 
+def imageInfo(image: Image.Image, id: str = "", imagePath: str = "", dataUsed: int = 0) -> None:
+    print("Image Info:")
+    if id != "":
+        print(" - ID: {0}".format(id))
+    print(" - Format: {0}".format(image.format))
+    print(" - Mode: {0}".format(image.mode))
+    print(" - Size: {0}".format(image.size))
+    print(" - Average Color: {0}".format(getAverageColor(image)))
+    if imagePath != "":
+        print(" - Path: {0}".format(imagePath))
+    if dataUsed != 0:
+        print(" - Total images used: {0}".format(dataUsed))
+
 def main(originalImagePath: str,
          datasetPath: str,
          datasetSummaryPath: str,
@@ -53,35 +66,18 @@ def main(originalImagePath: str,
 
     print("First 5 crops:")
     for i in range(5):
-        print("Crop {0}:".format(i))
-        print(" - Size: {0}".format(crop[i].size))
-        print(" - Mode: {0}".format(crop[i].mode))
-        print(" - Format: {0}".format(crop[i].format))
-        print(" - Average Color: {0}".format(getAverageColor(crop[i])))
+        imageInfo(crop[i], id="Crop {0}".format(i))
         crop[i].show()
         input("Press Enter to continue...")
 
-    orgAvgColor = getAverageColor(originalImage)
-
-    print("Original Image Info:")
-    print(" - Format: {0}".format(originalImage.format))
-    print(" - Mode: {0}".format(originalImage.mode))
-    print(" - Size: {0}".format(originalImage.size))
-    print(" - Path: {0}".format(originalImagePath))
-    print(" - Average Color: {0}".format(orgAvgColor))
+    imageInfo(originalImage, id="Original Image", imagePath=originalImagePath)
     originalImage.show()
 
     print("Creating new image...")
     mosaicImage: Image.Image = createMosaic(originalImage, datasetPath, crop)
     saveImage(mosaicImage, "output.jpg")
 
-    print("New Image Info:")
-    print(" - Format: {0}".format(mosaicImage.format))
-    print(" - Mode: {0}".format(mosaicImage.mode))
-    print(" - Size: {0}".format(mosaicImage.size))
-    print(" - Path: {0}".format("output.jpg"))
-    print(" - Average Color: {0}".format(getAverageColor(mosaicImage)))
-    print(" - Total images used: {0}".format(0))
+    imageInfo(mosaicImage, id="Mosaic Image", imagePath="output.jpg", dataUsed=len(crop))
     mosaicImage.show()
 
     print("Done.")
