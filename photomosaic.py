@@ -1,11 +1,31 @@
 # Photomosaic
 
 import argparse
+import threading 
 from PIL import Image
 
 verbose: bool = False
 showImages: bool = True
 diffThreshold: int = 50
+
+import sys
+
+class RetThread(threading.Thread):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.result = None
+
+    def run(self):
+        if self._target is None:
+            return  # could alternatively raise an exception, depends on the use case
+        try:
+            self.result = self._target(*self._args, **self._kwargs)
+        except Exception as exc:
+            print(f'{type(exc).__name__}: {exc}', file=sys.stderr)  # properly handle the exception
+
+    def join(self, *args, **kwargs):
+        super().join(*args, **kwargs)
+        return self.result
 
 def openImage(path) -> Image.Image:
     return Image.open(path)
@@ -97,33 +117,33 @@ def getDatasetRandomImage(cropAvgColor: tuple, cropColorRange: tuple[int, int, i
     # create thumbnail with crop size
     image.thumbnail(cropSize, Image.ANTIALIAS)
 
-    print("\rImage found:", closestImageData, end="             ")
-
-    return image
-
+    print("\r\t\t\t     Image found:", closestImageData, end="                          \r") 
+ 
+    return image 
+ 
 def getDatasetUniqueImage(cropAvgColor: tuple, cropColorRange: tuple[int, int, int], cropSize: tuple, datasetSummary: dict) -> Image.Image:
-    closestImageData: dict = {} 
-    closestDiffs = [999999, 999999, 999999]
-    closestIdxs = []
-    for i, x in enumerate(['r', 'g', 'b']):
+    closestImageData: dict = {}  
+    closestDiffs = [999999, 999999, 999999] 
+    closestIdxs = [] 
+    for i, x in enumerate(['r', 'g', 'b']): 
         rangeIndex = "{0}-{1}".format(cropColorRange[i], cropColorRange[i] + datasetSummary["rgbClassification"]["colorRange"])
         rgbSummary = datasetSummary["rgbClassification"][x][rangeIndex]
-        for j, imageData in enumerate(rgbSummary):
-            if imageData["used"]:
-                continue
+        for j, imageData in enumerate(rgbSummary): 
+            if imageData["used"]: 
+                continue 
             rDiff = abs(cropAvgColor[0] - imageData["averageColor"][0])
             gDiff = abs(cropAvgColor[1] - imageData["averageColor"][1])
             bDiff = abs(cropAvgColor[2] - imageData["averageColor"][2])
             if rDiff < closestDiffs[0] and gDiff < closestDiffs[1] and bDiff < closestDiffs[2]:
-                closestDiffs = [rDiff, gDiff, bDiff]
-                closestImageData = imageData
-                closestIdxs = [x, rangeIndex, j]
-
+                closestDiffs = [rDiff, gDiff, bDiff] 
+                closestImageData = imageData 
+                closestIdxs = [x, rangeIndex, j] 
+ 
     if closestImageData == {} or closestDiffs[0] > diffThreshold or closestDiffs[1] > diffThreshold or closestDiffs[2] > diffThreshold:
         return getUnusedDatasetImage(cropAvgColor, cropColorRange, cropSize, datasetSummary)
-
-    image: Image.Image = Image.open(closestImageData["path"])
-
+ 
+    image: Image.Image = Image.open(closestImageData["path"]) 
+ 
     # cut image to adjust to crop ratio
     cropRatio = cropSize[0] / cropSize[1]
     imageRatio = image.size[0] / image.size[1]
@@ -141,32 +161,32 @@ def getDatasetUniqueImage(cropAvgColor: tuple, cropColorRange: tuple[int, int, i
     # mark image as used, by adding a flag in the dataset summary
     datasetSummary["rgbClassification"][closestIdxs[0]][closestIdxs[1]][closestIdxs[2]]["used"] = True
 
-    print("\rImage found:", closestImageData, end="             ")
-
-    return image
-
+    print("\r\t\t\t     Image found:", closestImageData, end="                          \r") 
+ 
+    return image 
+ 
 # Search an image with rgb diff <= diffThreshold and that has not been used
 def getUnusedDatasetImage(cropAvgColor: tuple, cropColorRange: tuple[int, int, int], cropSize: tuple, datasetSummary: dict, extraRange: int = 2, ignoreRanges: list = [[], [], []]) -> Image.Image:
-    closestImageData: dict = {} 
-    closestIdxs = []
-    closestDiff = 999999
-    rangeIndexes = []
+    closestImageData: dict = {}  
+    closestIdxs = [] 
+    closestDiff = 999999 
+    rangeIndexes = [] 
     colorRange = datasetSummary["rgbClassification"]["colorRange"]
-    for g, cr in enumerate(cropColorRange):
-        # create two range before and two after cropColorRange
-        rangesList = []
+    for g, cr in enumerate(cropColorRange): 
+        # create two range before and two after cropColorRange 
+        rangesList = [] 
         for i in range(cr - extraRange*colorRange, cr + extraRange*colorRange, colorRange):
-            if i < 0 or i >= 255:
-                continue
-            if i == cr:
-                continue
-            rIndex = "{0}-{1}".format(i, i + colorRange)
-            if rIndex not in ignoreRanges[g]: 
-                rangesList.append(rIndex)
-        rangeIndexes.append(rangesList)
-
-    for i, x in enumerate(['r', 'g', 'b']):
-        for rangeIndex in rangeIndexes[i]:
+            if i < 0 or i >= 255: 
+                continue 
+            if i == cr: 
+                continue 
+            rIndex = "{0}-{1}".format(i, i + colorRange) 
+            if rIndex not in ignoreRanges[g]:  
+                rangesList.append(rIndex) 
+        rangeIndexes.append(rangesList) 
+ 
+    for i, x in enumerate(['r', 'g', 'b']): 
+        for rangeIndex in rangeIndexes[i]: 
             if rangeIndex not in datasetSummary["rgbClassification"][x]:
                 continue
 
@@ -207,38 +227,65 @@ def getUnusedDatasetImage(cropAvgColor: tuple, cropColorRange: tuple[int, int, i
     image.thumbnail(cropSize, Image.ANTIALIAS)
 
     # mark image as used, by adding a flag in the dataset summary
+    # sensitive are for threading, need to lock
+    threading.Lock().acquire()
     datasetSummary["rgbClassification"][closestIdxs[0]][closestIdxs[1]][closestIdxs[2]]["used"] = True
+    threading.Lock().release()
 
-    print("\rImage found:", closestImageData, end="             ")
-
-    return image
-
-def createMosaic(originalImage: Image.Image, 
-                 datasetPath: str, 
-                 datasetSummaryPath: str,
-                 canRepeat: bool,
-                 crops: list,
-                 cropSize: tuple,
+    print("\r\t\t\t     Image found:", closestImageData, end="                          \r") 
+ 
+    return image 
+ 
+def createMosaic(originalImage: Image.Image,  
+                 datasetPath: str,  
+                 datasetSummaryPath: str, 
+                 canRepeat: bool, 
+                 crops: list, 
+                 cropSize: tuple, 
                  orgAvgColor: tuple = (80, 80, 80)) -> Image.Image:
-
-    mosaicCrops: list = []
-    import json
-    with open(datasetSummaryPath, "r") as f:
-        datasetSummary = json.load(f)
+ 
+    mosaicCrops: list = [] 
+    import json 
+    with open(datasetSummaryPath, "r") as f: 
+        datasetSummary = json.load(f) 
         colorRange = datasetSummary["rgbClassification"]["colorRange"]
-        numImages = datasetSummary["numImages"]
-
-    if numImages < len(crops):
+        numImages = datasetSummary["numImages"] 
+ 
+    if numImages < len(crops): 
         print("Warning: Not enough images in the dataset to create the photomosaic.")
-        print("Some images will be repeated.")
+        print("Some images will be repeated.") 
+ 
+    usedImages = [] 
+ 
+    numThreads = 8
+ 
+    for i in range(0, len(crops), numThreads):
+        if i + numThreads > len(crops):
+            break
+        threads = []
+        for j in range(i, i+numThreads):
+            if j >= len(crops):
+                break
+            crop = crops[j]
+            cropAvgColor = getAverageColor(crop)
+            cropColorRange: tuple[int, int, int] = getColorRange(cropAvgColor, colorRange)
+            t = RetThread(target=getDatasetImage, args=(cropAvgColor, cropColorRange, cropSize, datasetSummary, canRepeat, usedImages))
+            threads.append(t)
+            t.start()
+        cropImages = []
+        for t in threads:
+            cropImages.append(t.join())
+        for t in cropImages:
+            mosaicCrops.append(t)
+        print("\rProgress: {0}/{1}".format(len(mosaicCrops), len(crops)), end="         \r")
 
-    usedImages = []
-
-    for crop in crops:
+    for i in range(len(mosaicCrops), len(crops)):
+        crop = crops[i]
         cropAvgColor = getAverageColor(crop)
         cropColorRange: tuple[int, int, int] = getColorRange(cropAvgColor, colorRange)
-        cropImage = getDatasetImage(cropAvgColor, cropColorRange, cropSize, datasetSummary, canRepeat, usedImages)
-        mosaicCrops.append(cropImage)
+        image = getDatasetImage(cropAvgColor, cropColorRange, cropSize, datasetSummary, canRepeat, usedImages)
+        mosaicCrops.append(image)
+        print("\rProgress: {0}/{1}".format(len(mosaicCrops), len(crops)), end="         \r")
 
     print()
 
@@ -292,7 +339,6 @@ def main(originalImagePath: str,
     if showImages: mosaicImage.show()
 
     print("Done.")
-    input("Press Enter to end...")
 
     return 0
 
